@@ -1,2 +1,10 @@
+0.0.2:
+- you can whip a thread if you send a message to him:
+msg.payload = "kill" or msg.payload = "stop"
+- 'step' option has been added - step, if the value between steps is to change
+- the option of counting down has been added. so it's not just a lullaby, but also a function: a nice morning (i.e. slow wake-up call) = counting up
+- a security option has been added for those able to otherwise;)
+
+
 0.0.1:
-first version
+- first version

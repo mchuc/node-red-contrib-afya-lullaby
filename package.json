@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-afya-lullaby",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "dimmer to help you fall asleep, created for my children :) change of the initial value X to the final value Y, in a given time Z",
   "keywords": [
     "lullaby",
@@ -9,6 +9,9 @@
     "children",
     "kids",
     "fall asleep",
+    "wake up",
+    "brightening",
+    "light",
     "node-red"
   ],
   "repository": {
