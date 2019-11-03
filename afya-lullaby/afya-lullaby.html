@@ -1,0 +1,73 @@
+<!-- /**
+* Lullaby by Marcin Chuć
+* e-mail: marcin ...change it to at... afya.pl
+* (C) 2019
+*/ -->
+<script type="text/javascript">
+  Math.seed = Date.now();
+  RED.nodes.registerType('afya-lullaby', {
+    category: 'function',
+    color: '#71FFC2',
+    paletteLabel: 'lullaby',
+    defaults: {
+      name: {
+        value: ""
+      },
+      dimmingTime: {
+        value: 1200,
+        required: true,
+        validate: RED.validators.number()
+      },
+      startValue: {
+        value: 100,
+        required: true,
+        validate: RED.validators.number()
+      },
+      stopValue: {
+        value: 0,
+        required: true,
+        validate: RED.validators.number()
+      },
+
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "brightness-3.png",
+    label: function() {
+      return this.name || this.startValue + " -> " + this.stopValue + " in " + this.dimmingTime + " s";
+    }
+  });
+
+</script>
+
+<script type="text/x-red" data-template-name="afya-lullaby">
+  <div class="form-row">
+         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+         <input type="text" id="node-input-name" placeholder="Name">
+     </div>
+     <div class="form-row">
+            <label for="node-config-input-dimmingTime"><i class="icon-clock"></i> Time to dimm (in seconds)</label>
+            <input type="text" id="node-input-dimmingTime" placeholder="20 min = 1200, 60 min=3600">
+        </div>
+        <div class="form-row">
+       <label for="node-config-input-startValue"><i class="icon-bookmark"></i> Start at value of</label>
+       <input type="text" id="node-input-startValue" placeholder="default: 100">
+   </div>
+   <div class="form-row">
+       <label for="node-config-input-stopValue"><i class="icon-bookmark"></i> Stop at value of</label>
+       <input type="text" id="node-input-stopValue" placeholder="default: 0">
+   </div>
+
+
+ </script>
+
+<script type="text/x-red" data-help-name="afya-lullaby">
+  <p><b>EN</b></p><hr>
+<p>This node was created for my children.<br>
+I realized that they like falling asleep under the light. That's why I thought about automating the process of turning off the light. At the set time Z the initial value X (here the light) is reduced to the set value Y (usually 0).</p>
+<p>The plugin itself, however, does not specifically manage the light, and returns the value "value" in "msg." and this value should be used.</p><br>
+<p><b>PL</b></p><hr>
+<p>Ten węzeł został stworzony z myślą o moich dzieciach.<br>
+Zdałem sobie sprawę, że lubią zasypiać przy zapalonym świetle. Dlatego pomyślałem, żeby zautomatyzować proces wygaszania światła. W zadanym czasie Z wartość początkowa X (tutaj światła) zostaje obniżona do zadanej Y (najczęściej 0).</p>
+<p>Sam plugin nie zarządza jednak konkretnie światłem, a zwraca wartość "value" w "msg." i właśnie tę wartość należy wykorzystać.</p>
+ </script>

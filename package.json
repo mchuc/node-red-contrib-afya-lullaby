@@ -1,0 +1,25 @@
+{
+  "name": "node-red-contrib-afya-lullaby",
+  "version": "0.0.1",
+  "description": "dimmer to help you fall asleep, created for my children :) change of the initial value X to the final value Y, in a given time Z",
+  "keywords": [
+    "lullaby",
+    "dimmer",
+    "timer",
+    "children",
+    "kids",
+    "fall asleep",
+    "node-red"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mchuc/node-red-contrib-afya-lullaby"
+  },
+  "author": "Marcin Chuć, marcin a.t afya.pl",
+  "license": "Creative Common",
+  "node-red": {
+    "nodes": {
+      "afya-panic-button": "afya-lullaby/afya-lullaby.js"
+    }
+  }
+}
