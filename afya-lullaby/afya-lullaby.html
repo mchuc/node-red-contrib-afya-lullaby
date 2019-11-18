@@ -4,7 +4,6 @@
 * (C) 2019
 */ -->
 <script type="text/javascript">
-  Math.seed = Date.now();
   RED.nodes.registerType('afya-lullaby', {
     category: 'function',
     color: '#71FFC2',
@@ -29,7 +28,7 @@
         validate: RED.validators.number()
       },
       step: {
-        value: 0,
+        value: 1,
         required: true,
         validate: RED.validators.number()
       }
@@ -80,6 +79,7 @@ I realized that they like falling asleep under the light. That's why I thought a
 <code>
 msg.payload="kill"
 </code>
+<br>Example of use: <a href="https://flows.nodered.org/flow/ce2fe16f73fc82e2760eaaadf28991b9" target="_blank">https://flows.nodered.org/flow/ce2fe16f73fc82e2760eaaadf28991b9</a>
 </p>
 <p><b>PL</b></p><hr>
 <p>Ten węzeł został stworzony z myślą o moich dzieciach.<br>
@@ -90,4 +90,5 @@ Zdałem sobie sprawę, że lubią zasypiać przy zapalonym świetle. Dlatego pom
 <code>
 msg.payload="kill"
 </code>
+<br>Przykład użycia: <a href="https://flows.nodered.org/flow/ce2fe16f73fc82e2760eaaadf28991b9" target="_blank">https://flows.nodered.org/flow/ce2fe16f73fc82e2760eaaadf28991b9</a>
  </script>
