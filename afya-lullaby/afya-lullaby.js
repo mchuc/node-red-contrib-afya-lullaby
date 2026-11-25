@@ -1,245 +1,142 @@
 /**
- * Lullaby Marcin Chuć
- * e-mail: marcin ...change it to at... afya.pl
- * (C) 2019
+ * AFYA Lullaby – changes a value from X to Y in Z seconds (dimming to sleep / slow wake-up light).
+ * (C) 2019–2026 Marcin Chuć · MIT
  */
+'use strict';
 
-module.exports = function(RED) {
+function hhmmss(d = new Date()) {
+  return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+}
 
-  /**
-   main function
-  */
+/** Validated plan of the dimming, or { error }. */
+function plan(config) {
+  const dimmingTime = Math.abs(Number(config.dimmingTime)) * 1000;
+  const startValue = Math.round(Math.abs(Number(config.startValue)));
+  const stopValue = Math.round(Math.abs(Number(config.stopValue)));
+  const step = Math.round(Math.abs(Number(config.step)));
+  if (![dimmingTime, startValue, stopValue, step].every(Number.isFinite)) return { error: 'numbers expected' };
+  if (step === 0) return { error: 'step is 0' };
+  if (startValue === stopValue) return { error: 'start value = stop value' };
+  if (dimmingTime === 0) return { error: 'time is 0' };
+  const down = startValue > stopValue;
+  const steps = Math.max(1, Math.round(Math.abs(startValue - stopValue) / step));
+  return {
+    dimmingTime,
+    startValue,
+    stopValue,
+    step,
+    down,
+    direction: down ? 'down' : 'up',
+    recallTime: Math.max(1, Math.round(dimmingTime / steps)),
+  };
+}
+
+module.exports = function (RED) {
   function AFYALullaby(config) {
     RED.nodes.createNode(this, config);
-    var node = this;
-    node.on('input', function(msg) {
-      /*
-      Math.seed = Date.now();
-      if (node.variableName === undefined) {
-        node.variableName = "AFYALullaby_" + Math.random().toString(36).substr(2, 5) + Date.now().toString().substr(-3);
+    const node = this;
 
-      }
-      var myLullaby = node.context().flow.get(node.variableName) || {};
+    // the variable is optional for nodes created before 0.1.0
+    const scope = config.scope === 'flow' ? 'flow' : 'global';
+    const name = String(config.variableName || '').trim();
+    const { key, store } = RED.util.parseContextStore(name);
+    const publish = (state) => {
+      if (key) node.context()[scope].set(key, state, store);
+    };
 
-      */
-      // kill message
-      if ('payload' in msg) {
-        if (String(msg['payload']).toLowerCase() == "kill" || String(msg['payload']).toLowerCase() == "stop") {
-          if ('timeObject' in node) {
-            deleteInterval(node);
-            this.status({
-              fill: "red",
-              shape: "dot",
-              text: "state: killed...  <" + timeConvert(Date.now()) + ">"
-            });
+    const p = plan(config);
+    let timer = null;
+    let run = null; // { value, startTime, stopTime, shape }
 
-          } else {
-            this.status({
-              fill: "yellow",
-              shape: "dot",
-              text: "state: tried to kill...but the node stopped  <" + timeConvert(Date.now()) + ">"
-            });
-          }
-          return;
-        }
-      }
-
-      // exit, if started angin : i have timeObject - also Loop exists
-      if (node.timeObject !== undefined) {
-        return;
-      }
-      if (myLullaby === undefined) {
-        var myLullaby = {};
-      }
-
-      // this variable changes the state - true/false to choose box or ring as node state
-      if (myLullaby.boxOrRing === undefined) {
-        myLullaby.boxOrRing = false;
-      }
-
-      //my step up or step down
-      if (myLullaby.step === undefined) {
-        myLullaby.step = Math.round(Math.abs(config.step));
-      }
-      if (myLullaby.step == 0) {
-        this.status({
-          fill: "red",
-          shape: "dot",
-          text: "state: config error - step down or up value is 0 !  <" + timeConvert(Date.now()) + ">"
-        });
-        return;
-      }
-
-      // startTime, timestamp, not used in all
-      if (myLullaby.startTime === undefined) {
-        myLullaby.startTime = Date.now();
-      }
-
-      // dimming Time in seconds
-      if (myLullaby.dimmingTime === undefined) {
-        myLullaby.dimmingTime = config.dimmingTime * 1000;
-      }
-
-      // stopTime - not used in all
-      if (myLullaby.stopTime === undefined) {
-        myLullaby.stopTime = myLullaby.startTime + myLullaby.dimmingTime;
-      }
-
-      // dimming from startValue - positive int only
-      if (myLullaby.startValue === undefined) {
-        myLullaby.startValue = Math.round(Math.abs(config.startValue));
-      }
-      // dimming to stopValue - positive int only
-      if (myLullaby.stopValue === undefined) {
-        myLullaby.stopValue = Math.round(Math.abs(config.stopValue / 1));
-      }
-
-      // check if i have something to do...
-      if (myLullaby.startValue == myLullaby.stopValue) {
-        this.status({
-          fill: "red",
-          shape: "dot",
-          text: "state: config error - startValue = stopValue  <" + timeConvert(Date.now()) + ">"
-        });
-        return;
-      }
-      if (myLullaby.startValue > myLullaby.stopValue) {
-        myLullaby.direction = true; // true = direction down
-      } else {
-        myLullaby.directtion = false; // false = direction up
-      }
-
-
-      // my current dimm value is currValue
-      if (myLullaby.currValue === undefined) {
-        myLullaby.currValue = myLullaby.startValue;
-      }
-
-      /**
-      i want to decrease by 1 in x time ...
-      */
-      // my dimming diference
-      if (myLullaby.dimmingDifference === undefined) {
-        myLullaby.dimmingDifference = Math.abs(myLullaby.startValue - myLullaby.stopValue);
-      }
-
-      // every how many seconds change the setting value = dimmingTime/ (dimmingDiference/step)
-      var steps = Math.round(myLullaby.dimmingDifference / myLullaby.step);
-      if (steps == 0) {
-        steps = 1;
-      }
-
-      if (myLullaby.recallTime === undefined) {
-        myLullaby.recallTime = Math.round(myLullaby.dimmingTime / steps);
-      }
-
-      // assign my Lullaby
-      node.myLullaby = myLullaby;
-
-      /*
-      node.context().flow.set(node.variableName, myLullaby);
-      */
-
-      this.status({
-        fill: "blue",
-        shape: "ring",
-        text: "state: starting... " + myLullaby.startValue + " -> " + myLullaby.stopValue + " <" + timeConvert(Date.now()) + ">"
-      });
-
-      msg = {
-        payload: {
-          value: myLullaby.currValue,
-          timestamp: Date.now(),
-          direction: (myLullaby.direction ? "down" : "up"),
-          state: "counting"
-        }
-      }
-      node.timeObject = setInterval(timeLoop, node.myLullaby.recallTime, node);
-      node.send(msg);
-    });
-  }
-
-  /**
-  function timeConvert returns string from given timestamp as i.e.: 2010-10-1 17:09:11
-  */
-  function timeConvert(myTimeStamp) {
-    var d = new Date(myTimeStamp);
-    var time = [d.getFullYear(), d.getMonth() + 1, d.getDate()].join('/') + ' ' + [d.getHours(), d.getMinutes(), d.getSeconds()].join(':');
-    return time;
-  }
-  /**
-  function timeLoop - loops my lullaby ;)
-  */
-  function timeLoop(childNode) {
-    var myLullaby = childNode.myLullaby; //childNode.context().flow.get(variableName) || {};
-    if (myLullaby.direction) { //direction down
-      myLullaby.currValue = myLullaby.currValue - myLullaby.step;
-    } else { //direction up
-      myLullaby.currValue = myLullaby.currValue + myLullaby.step;
-    }
-    myLullaby.boxOrRing = !myLullaby.boxOrRing;
-    //childNode.context().flow.set(variableName, myLullaby);
-
-    childNode.status({
-      fill: "green",
-      shape: (myLullaby.boxOrRing ? "dot" : "ring"),
-      text: "state: active " + myLullaby.startValue + " ->; " + myLullaby.stopValue + " value:" + myLullaby.currValue + " <" + timeConvert(Date.now()) + ">"
+    const payload = (value, state) => ({
+      value,
+      timestamp: Date.now(),
+      direction: p.direction,
+      state,
     });
 
-    //normal message
-    var msg = {
-      payload: {
-        value: myLullaby.currValue,
+    const publishState = (value, state) =>
+      publish({
+        value,
+        state,
+        direction: p.direction,
+        startValue: p.startValue,
+        stopValue: p.stopValue,
+        startTime: run ? run.startTime : null,
+        stopTime: run ? run.stopTime : null,
         timestamp: Date.now(),
-        direction: (myLullaby.direction ? "down" : "up"),
-        state: "counting"
-      }
-    }
-
-    /**
-    if we count down and 'currValue' is less than or equal to stopValue
-    or
-    if we count up and the 'currValue' value is at least equal to or greater than the stopValue value
-    or
-    if the time of planned blanking (increase) exceeded the blanking (increase) time + 1 step increase period 1
-
-    -> counting must be completed
-    */
-    if ((myLullaby.currValue <= myLullaby.stopValue && myLullaby.direction) || (myLullaby.currValue >= myLullaby.stopValue && !myLullaby.direction) || myLullaby.stopTime + myLullaby.recallTime < Date.now()) {
-      //ovverride message - currValue sholudn't < stopValue
-      msg = {
-        payload: {
-          value: myLullaby.stopValue,
-          timestamp: Date.now(),
-          direction: (myLullaby.direction ? "down" : "up"),
-          state: "end"
-        }
-      }
-
-      childNode.status({
-        fill: "red",
-        shape: "dot",
-        text: "state: ended " + myLullaby.startValue + " -> " + myLullaby.stopValue + " value:" + myLullaby.stopValue + " <" + timeConvert(Date.now()) + ">"
       });
-      deleteInterval(childNode);
+
+    function stop() {
+      if (timer) clearInterval(timer);
+      timer = null;
+      run = null;
     }
-    // send message
-    childNode.send(msg);
 
-  }
-  /**
-  function deleteInterval deletes my lullaby loop and cleans myLullaby in node
-  */
-  function deleteInterval(childNode) {
-    if (childNode.timeObject !== undefined) {
-      clearInterval(childNode.timeObject);
-      delete childNode.timeObject;
+    function tick() {
+      run.value += p.down ? -p.step : p.step;
+      run.shape = run.shape === 'dot' ? 'ring' : 'dot';
+      const reached = p.down ? run.value <= p.stopValue : run.value >= p.stopValue;
+      const late = run.stopTime + p.recallTime < Date.now();
+
+      if (reached || late) {
+        node.status({ fill: 'red', shape: 'dot', text: `end · ${p.stopValue} · ${hhmmss()}` });
+        publishState(p.stopValue, 'end');
+        stop();
+        node.send({ payload: payload(p.stopValue, 'end') });
+        return;
+      }
+      node.status({
+        fill: 'green',
+        shape: run.shape,
+        text: `${p.startValue} → ${p.stopValue} · now ${run.value} · ${hhmmss()}`,
+      });
+      publishState(run.value, 'counting');
+      node.send({ payload: payload(run.value, 'counting') });
     }
-    delete childNode.myLullaby;
 
+    if (p.error) node.status({ fill: 'red', shape: 'ring', text: `config error: ${p.error}` });
+    else node.status({ fill: 'grey', shape: 'ring', text: `ready · ${p.startValue} → ${p.stopValue}` });
 
+    node.on('input', (msg, send, done) => {
+      const cmd = String(msg.payload).trim().toLowerCase();
+
+      if (cmd === 'kill' || cmd === 'stop') {
+        if (timer) {
+          const value = run.value;
+          stop();
+          publishState(value, 'killed');
+          node.status({ fill: 'red', shape: 'dot', text: `stopped at ${value} · ${hhmmss()}` });
+        } else {
+          node.status({ fill: 'yellow', shape: 'dot', text: `not running · ${hhmmss()}` });
+        }
+        return done();
+      }
+
+      if (p.error) return done(new Error(`AFYA lullaby: ${p.error}`));
+      if (timer) return done(); // already running – ignore
+
+      const now = Date.now();
+      run = { value: p.startValue, startTime: now, stopTime: now + p.dimmingTime, shape: 'ring' };
+      node.status({ fill: 'blue', shape: 'ring', text: `start ${p.startValue} → ${p.stopValue} · ${hhmmss()}` });
+      publishState(p.startValue, 'counting');
+      timer = setInterval(tick, p.recallTime);
+      msg.payload = payload(p.startValue, 'counting');
+      send(msg);
+      done();
+    });
+
+    node.on('close', (removed, done) => {
+      if (timer) {
+        const value = run.value;
+        stop();
+        publishState(value, 'stopped');
+      }
+      done();
+    });
   }
 
-  //register node
-  RED.nodes.registerType("afya-lullaby", AFYALullaby);
-}
+  RED.nodes.registerType('afya-lullaby', AFYALullaby);
+};
+
+module.exports.plan = plan;

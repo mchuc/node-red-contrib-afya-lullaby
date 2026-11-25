@@ -1,28 +1,48 @@
 {
   "name": "node-red-contrib-afya-lullaby",
-  "version": "0.0.3",
-  "description": "dimmer to help you fall asleep, created for my children :) change of the initial value X to the final value Y, in a given time Z",
+  "version": "0.1.0",
+  "description": "Node-RED dimmer helper: changes a value from X to Y in Z seconds – dim the light to fall asleep or brighten it for a slow wake-up.",
+  "main": "afya-lullaby/afya-lullaby.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "keywords": [
+    "node-red",
+    "afya",
     "lullaby",
     "dimmer",
     "timer",
-    "children",
-    "kids",
+    "fade",
+    "light",
     "fall asleep",
     "wake up",
-    "brightening",
-    "light",
-    "node-red"
+    "sunrise",
+    "children"
   ],
+  "node-red": {
+    "version": ">=3.0.0",
+    "nodes": {
+      "afya-lullaby": "afya-lullaby/afya-lullaby.js"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "afya-lullaby/*.js",
+    "afya-lullaby/*.html",
+    "LICENSE",
+    "README.md",
+    "change.log"
+  ],
+  "author": "Marcin Chuć <marcin@afya.pl> (https://github.com/mchuc)",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mchuc/node-red-contrib-afya-lullaby"
+    "url": "git+https://github.com/mchuc/node-red-contrib-afya-lullaby.git"
   },
-  "author": "Marcin Chuć, marcin a.t afya.pl",
-  "license": "Creative Common",
-  "node-red": {
-    "nodes": {
-      "afya-panic-button": "afya-lullaby/afya-lullaby.js"
-    }
-  }
+  "bugs": {
+    "url": "https://github.com/mchuc/node-red-contrib-afya-lullaby/issues"
+  },
+  "homepage": "https://github.com/mchuc/node-red-contrib-afya-lullaby#readme"
 }

@@ -1,3 +1,15 @@
+0.1.0 (2026-11-25):
+- Fixed: package.json registered the node under the "afya-panic-button" key
+  (conflict when both packages were installed)
+- New: current state ({ value, state, direction, … }) in a global/flow context variable
+- Fixed: timer kept running after a redeploy
+- Configuration checked on deploy, errors are passed to a Catch node
+- Message properties of the starting message are kept
+- New modern edit dialog (sections, live summary, spinners, validation), palette category "AFYA",
+  Font Awesome icon, English UI with English + Polish help
+- Short, consistent node status (value · time)
+- MIT license, Node-RED >= 3.0, Node.js >= 18, unit tests (`npm test`)
+
 0.0.2:
 - you can whip a thread if you send a message to him:
 msg.payload = "kill" or msg.payload = "stop"
