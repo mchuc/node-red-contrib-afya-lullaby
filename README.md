@@ -38,6 +38,19 @@ Requires Node-RED ≥ 3.0 and Node.js ≥ 18. The node appears in the **AFYA** p
 * any message – start (ignored while running),
 * `msg.payload = "stop"` or `"kill"` – stop at the current value.
 
+### Start from the current value (`msg.payload`)
+
+Turn on **Start from the number in msg.payload** and send the current value as a number, e.g. the brightness
+of the lamp – the change starts from there instead of the configured start value:
+
+* above the stop value – dimming, below – brightening; equal – the node sends `end` at once,
+* text, objects and timestamps (a default *inject*) keep the configured start value,
+* **Time from there**: *always the time above*, or *same speed* – with 100 → 0 in 20 min, 50 → 0 takes 10 min.
+
+Handy e.g. for a home theatre: dim from the brightness the lights have when the film starts. If the
+brightness comes in another property (e.g. `msg.payload.brightness`), move it to `msg.payload` with a
+*change* node first.
+
 ### Output
 
 ```json
@@ -80,7 +93,10 @@ Wymaga Node-RED ≥ 3.0 i Node.js ≥ 18. Węzeł **lullaby** jest w grupie pale
 * **Start value / Stop value** – od czego do czego (start > stop: gaszenie, start < stop: rozjaśnianie),
 * **Step** – zmiana na krok, **Time** – czas w sekundach (20 min = 1200),
 * **Variable** – zmienna **global** lub **flow** z bieżącym stanem (dostępna z innych flow),
-* dowolna wiadomość uruchamia, `msg.payload = "stop"` lub `"kill"` przerywa.
+* dowolna wiadomość uruchamia, `msg.payload = "stop"` lub `"kill"` przerywa,
+* **Start from the number in msg.payload** – liczba w `msg.payload` (np. obecna jasność lampy) staje się
+  wartością startową; kierunek wynika z niej, a **Time from there** decyduje, czy czas jest zawsze ten sam,
+  czy prędkość (krótszy zakres – krócej). Tekst, obiekt i znacznik czasu z *inject* nie zmieniają startu.
 
 Na wyjściu: `{ value, state, direction, timestamp }`, `state`: `counting` lub `end`.
 

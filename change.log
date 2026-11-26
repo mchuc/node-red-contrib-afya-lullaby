@@ -1,3 +1,9 @@
+0.2.0 (2026-11-26):
+- New: start from the number in msg.payload (e.g. the current brightness) – GitHub issue #1.
+  Option "Start from the number in msg.payload"; the direction follows from it, equal to the stop value = "end" at once;
+  text, objects and timestamps (default inject) keep the configured start value
+- New: "Time from there" – always the configured time, or the same speed (a shorter range takes less time)
+
 0.1.0 (2026-11-25):
 - Fixed: package.json registered the node under the "afya-panic-button" key
   (conflict when both packages were installed)

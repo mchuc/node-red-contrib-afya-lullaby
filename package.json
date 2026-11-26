@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-afya-lullaby",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node-RED dimmer helper: changes a value from X to Y in Z seconds – dim the light to fall asleep or brighten it for a slow wake-up.",
   "main": "afya-lullaby/afya-lullaby.js",
   "scripts": {

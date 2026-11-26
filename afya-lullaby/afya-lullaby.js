@@ -4,6 +4,9 @@
  */
 'use strict';
 
+/** Bigger numbers in msg.payload are taken for timestamps (e.g. a default inject), not for a start value. */
+const MAX_START = 1e9;
+
 function hhmmss(d = new Date()) {
   return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
 }
@@ -31,6 +34,44 @@ function plan(config) {
   };
 }
 
+/**
+ * Start value from msg.payload: a number or a numeric text ("45", "45,5"), ≥ 0, rounded.
+ * null = not a start value (text command, object, negative…), 'timestamp' = looks like a timestamp.
+ */
+function startFromPayload(payload) {
+  if (typeof payload !== 'number' && typeof payload !== 'string') return null;
+  const txt = typeof payload === 'string' ? payload.trim().replace(',', '.') : payload;
+  if (txt === '') return null;
+  const n = Number(txt);
+  if (!Number.isFinite(n) || n < 0) return null;
+  if (n > MAX_START) return 'timestamp';
+  return Math.round(n);
+}
+
+/**
+ * Plan of one run. `start` = start value from msg.payload (or null → configured start).
+ * timeMode 'fixed' – always the configured time; 'rate' – same speed as the configured range,
+ * so a shorter range takes proportionally less time.
+ */
+function runPlan(p, start, timeMode) {
+  if (start === null || start === undefined || start === p.startValue) return { ...p, from: 'config', empty: false };
+  const range = Math.abs(start - p.stopValue);
+  const dimmingTime =
+    timeMode === 'rate' ? Math.round((p.dimmingTime * range) / Math.abs(p.startValue - p.stopValue)) : p.dimmingTime;
+  const down = start > p.stopValue;
+  const steps = Math.max(1, Math.round(range / p.step));
+  return {
+    ...p,
+    startValue: start,
+    dimmingTime,
+    down,
+    direction: down ? 'down' : 'up',
+    recallTime: Math.max(1, Math.round(dimmingTime / steps)),
+    from: 'payload',
+    empty: range === 0,
+  };
+}
+
 module.exports = function (RED) {
   function AFYALullaby(config) {
     RED.nodes.createNode(this, config);
@@ -45,25 +86,27 @@ module.exports = function (RED) {
     };
 
     const p = plan(config);
+    const fromPayload = !!config.startFromPayload;
+    const timeMode = config.timeMode === 'rate' ? 'rate' : 'fixed';
     let timer = null;
-    let run = null; // { value, startTime, stopTime, shape }
+    let run = null; // { p, value, startTime, stopTime, shape }
 
-    const payload = (value, state) => ({
+    const payload = (r, value, state) => ({
       value,
       timestamp: Date.now(),
-      direction: p.direction,
+      direction: r.direction,
       state,
     });
 
-    const publishState = (value, state) =>
+    const publishState = (r, value, state, startTime = null, stopTime = null) =>
       publish({
         value,
         state,
-        direction: p.direction,
-        startValue: p.startValue,
-        stopValue: p.stopValue,
-        startTime: run ? run.startTime : null,
-        stopTime: run ? run.stopTime : null,
+        direction: r.direction,
+        startValue: r.startValue,
+        stopValue: r.stopValue,
+        startTime,
+        stopTime,
         timestamp: Date.now(),
       });
 
@@ -74,38 +117,45 @@ module.exports = function (RED) {
     }
 
     function tick() {
-      run.value += p.down ? -p.step : p.step;
+      const r = run.p;
+      run.value += r.down ? -r.step : r.step;
       run.shape = run.shape === 'dot' ? 'ring' : 'dot';
-      const reached = p.down ? run.value <= p.stopValue : run.value >= p.stopValue;
-      const late = run.stopTime + p.recallTime < Date.now();
+      const reached = r.down ? run.value <= r.stopValue : run.value >= r.stopValue;
+      const late = run.stopTime + r.recallTime < Date.now();
 
       if (reached || late) {
-        node.status({ fill: 'red', shape: 'dot', text: `end · ${p.stopValue} · ${hhmmss()}` });
-        publishState(p.stopValue, 'end');
+        node.status({ fill: 'red', shape: 'dot', text: `end · ${r.stopValue} · ${hhmmss()}` });
+        publishState(r, r.stopValue, 'end', run.startTime, run.stopTime);
         stop();
-        node.send({ payload: payload(p.stopValue, 'end') });
+        node.send({ payload: payload(r, r.stopValue, 'end') });
         return;
       }
       node.status({
         fill: 'green',
         shape: run.shape,
-        text: `${p.startValue} → ${p.stopValue} · now ${run.value} · ${hhmmss()}`,
+        text: `${r.startValue} → ${r.stopValue} · now ${run.value} · ${hhmmss()}`,
       });
-      publishState(run.value, 'counting');
-      node.send({ payload: payload(run.value, 'counting') });
+      publishState(r, run.value, 'counting', run.startTime, run.stopTime);
+      node.send({ payload: payload(r, run.value, 'counting') });
     }
 
     if (p.error) node.status({ fill: 'red', shape: 'ring', text: `config error: ${p.error}` });
-    else node.status({ fill: 'grey', shape: 'ring', text: `ready · ${p.startValue} → ${p.stopValue}` });
+    else {
+      node.status({
+        fill: 'grey',
+        shape: 'ring',
+        text: `ready · ${fromPayload ? 'msg.payload' : p.startValue} → ${p.stopValue}`,
+      });
+    }
 
     node.on('input', (msg, send, done) => {
       const cmd = String(msg.payload).trim().toLowerCase();
 
       if (cmd === 'kill' || cmd === 'stop') {
         if (timer) {
-          const value = run.value;
+          const { value, p: r, startTime, stopTime } = run;
           stop();
-          publishState(value, 'killed');
+          publishState(r, value, 'killed', startTime, stopTime);
           node.status({ fill: 'red', shape: 'dot', text: `stopped at ${value} · ${hhmmss()}` });
         } else {
           node.status({ fill: 'yellow', shape: 'dot', text: `not running · ${hhmmss()}` });
@@ -116,21 +166,38 @@ module.exports = function (RED) {
       if (p.error) return done(new Error(`AFYA lullaby: ${p.error}`));
       if (timer) return done(); // already running – ignore
 
+      let start = fromPayload ? startFromPayload(msg.payload) : null;
+      if (start === 'timestamp') {
+        node.warn('msg.payload looks like a timestamp – using the configured start value');
+        start = null;
+      }
+      const r = runPlan(p, start, timeMode);
       const now = Date.now();
-      run = { value: p.startValue, startTime: now, stopTime: now + p.dimmingTime, shape: 'ring' };
-      node.status({ fill: 'blue', shape: 'ring', text: `start ${p.startValue} → ${p.stopValue} · ${hhmmss()}` });
-      publishState(p.startValue, 'counting');
-      timer = setInterval(tick, p.recallTime);
-      msg.payload = payload(p.startValue, 'counting');
+      const zrodlo = r.from === 'payload' ? ' (from msg.payload)' : '';
+
+      if (r.empty) {
+        // already at the stop value – nothing to dim
+        node.status({ fill: 'red', shape: 'dot', text: `already at ${r.stopValue}${zrodlo} · ${hhmmss()}` });
+        publishState(r, r.stopValue, 'end', now, now);
+        msg.payload = payload(r, r.stopValue, 'end');
+        send(msg);
+        return done();
+      }
+
+      run = { p: r, value: r.startValue, startTime: now, stopTime: now + r.dimmingTime, shape: 'ring' };
+      node.status({ fill: 'blue', shape: 'ring', text: `start ${r.startValue} → ${r.stopValue}${zrodlo} · ${hhmmss()}` });
+      publishState(r, r.startValue, 'counting', run.startTime, run.stopTime);
+      timer = setInterval(tick, r.recallTime);
+      msg.payload = payload(r, r.startValue, 'counting');
       send(msg);
       done();
     });
 
     node.on('close', (removed, done) => {
       if (timer) {
-        const value = run.value;
+        const { value, p: r, startTime, stopTime } = run;
         stop();
-        publishState(value, 'stopped');
+        publishState(r, value, 'stopped', startTime, stopTime);
       }
       done();
     });
@@ -140,3 +207,5 @@ module.exports = function (RED) {
 };
 
 module.exports.plan = plan;
+module.exports.runPlan = runPlan;
+module.exports.startFromPayload = startFromPayload;

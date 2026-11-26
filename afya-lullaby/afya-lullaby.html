@@ -55,7 +55,7 @@
       icon: 'font-awesome/fa-moon-o',
       inputs: 1,
       outputs: 1,
-      inputLabels: 'start, or "stop" / "kill"',
+      inputLabels: 'start (optionally the start value in msg.payload), or "stop" / "kill"',
       outputLabels: 'msg.payload = { value, state, direction, timestamp }',
       defaults: {
         name: { value: '' },
@@ -72,6 +72,8 @@
         step: { value: 1, required: true, validate: function (v) { return nonNegative(v) && Number(v) > 0; } },
         variableName: { value: '', required: false },
         scope: { value: 'global' },
+        startFromPayload: { value: false },
+        timeMode: { value: 'fixed' },
       },
       label: function () {
         return this.name || this.startValue + ' → ' + this.stopValue + ' in ' + human(this.dimmingTime);
@@ -106,6 +108,13 @@
             text = (start > stop ? '<i class="fa fa-moon-o"></i> Dimming ' : '<i class="fa fa-sun-o"></i> Brightening ') +
               '<b>' + start + ' → ' + stop + '</b> in <b>' + human(time) + '</b>: ' +
               (start > stop ? '−' : '+') + step + ' every ' + human(every) + ' (' + steps + ' steps).';
+            if ($('#node-input-startFromPayload').is(':checked')) {
+              text += '<br><i class="fa fa-sign-in"></i> A number in <code>msg.payload</code> (e.g. the current brightness) ' +
+                'replaces the start value' + ($('#node-input-timeMode').val() === 'rate'
+                  ? ' – at the same speed, so e.g. ' + Math.round((start + stop) / 2) + ' → ' + stop + ' takes ' +
+                    human(time * Math.abs(Math.round((start + stop) / 2) - stop) / Math.abs(start - stop)) + '.'
+                  : ' – it still takes ' + human(time) + '.');
+            }
             const key = plainKey(name.typedInput('value'));
             text += '<br>' + (key
               ? 'Current value is kept in <code>' + name.typedInput('type') + '.' + $('<span>').text(key).html() + '</code>.'
@@ -116,6 +125,13 @@
         name.on('change', summary);
         $('#node-input-dimmingTime, #node-input-startValue, #node-input-stopValue, #node-input-step')
           .on('change keyup spin spinstop', function () { setTimeout(summary, 0); });
+        $('#node-input-startFromPayload')
+          .on('change', function () {
+            $('.afya-lullaby-payload').toggle(this.checked);
+            summary();
+          })
+          .trigger('change');
+        $('#node-input-timeMode').on('change', summary);
         summary();
       },
     });
@@ -149,6 +165,17 @@
       <span class="afya-unit">s <span id="afya-lullaby-time-human"></span></span>
     </div>
     <div class="afya-hint">Start &gt; stop: dimming (falling asleep). Start &lt; stop: brightening (wake-up light).</div>
+    <div class="afya-check">
+      <input type="checkbox" id="node-input-startFromPayload">
+      <label for="node-input-startFromPayload">Start from the number in <code>msg.payload</code> (e.g. the current brightness)</label>
+    </div>
+    <div class="form-row afya-lullaby-payload">
+      <label for="node-input-timeMode"><i class="fa fa-tachometer"></i> Time from there</label>
+      <select id="node-input-timeMode" style="width: 65%;">
+        <option value="fixed">always the time above</option>
+        <option value="rate">same speed – a shorter range takes less time</option>
+      </select>
+    </div>
 
     <div class="afya-section"><i class="fa fa-database"></i> Context variable</div>
     <div class="form-row">
@@ -169,9 +196,15 @@
 
   <h3>Inputs</h3>
   <dl class="message-properties">
-    <dt>payload <span class="property-type">any | "stop" | "kill"</span></dt>
+    <dt>payload <span class="property-type">any | number | "stop" | "kill"</span></dt>
     <dd>Any message starts the change (ignored while running). <code>stop</code> or <code>kill</code> stops it
-      at the current value.</dd>
+      at the current value.<br>
+      With <i>Start from the number in msg.payload</i>, a number (or numeric text) in <code>msg.payload</code> is
+      the start value, e.g. the current brightness of the lamp – the direction follows from it (above the stop value:
+      dimming, below: brightening). If it already equals the stop value, the node sends <code>end</code> at once.
+      Anything else (text, object, a timestamp from a default <i>inject</i>) uses the configured start value.
+      <i>Time from there</i>: <b>always the time above</b>, or <b>same speed</b> – e.g. 100 → 0 in 20 min means
+      50 → 0 in 10 min.</dd>
   </dl>
 
   <h3>Outputs</h3>
@@ -198,6 +231,8 @@
     zasypianiu dzieci albo budzenia światłem (start &lt; stop). Węzeł tylko liczy – użyj
     <code>msg.payload.value</code>. <code>msg.payload = "stop"</code> lub <code>"kill"</code> przerywa.
     Opcjonalnie zapisuje bieżący stan do zmiennej <b>global</b> lub <b>flow</b>.</p>
+  <p>Opcja <i>Start from the number in msg.payload</i>: liczba w <code>msg.payload</code> (np. obecna jasność lampy)
+    jest wartością startową. Czas: zawsze ustawiony albo ta sama prędkość (krótszy zakres – krócej).</p>
 
   <p><small>Marcin Chuć · MIT</small></p>
 </script>
