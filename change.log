@@ -1,3 +1,7 @@
+0.3.0 (2026-11-28):
+- Edit dialog: new setting "Labels" – descriptions in Polish for a Polish system, English for all others,
+  or chosen by hand (English / Polski); only the descriptions change, fields and values stay the same
+
 0.2.0 (2026-11-26):
 - New: start from the number in msg.payload (e.g. the current brightness) – GitHub issue #1.
   Option "Start from the number in msg.payload"; the direction follows from it, equal to the stop value = "end" at once;

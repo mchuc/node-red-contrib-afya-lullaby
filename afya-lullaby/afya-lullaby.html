@@ -35,6 +35,71 @@
     const randomName = (prefix) => prefix + Math.random().toString(36).slice(2, 7) + Date.now().toString().slice(-5);
     const plainKey = (v) => String(v || '').replace(/^#:\(\S+?\)::/, '');
     const nonNegative = (v) => /^\d+$/.test(String(v).trim());
+    const TEXTS = {
+      en: {
+        name: 'Name', namePh: 'optional', lang: 'Labels', langAuto: 'system language ({l})',
+        secDim: 'Dimming', start: 'Start value', stop: 'Stop value', step: 'Step', stepUnit: 'change per step', time: 'Time',
+        dirHint: 'Start &gt; stop: dimming (falling asleep). Start &lt; stop: brightening (wake-up light).',
+        fromPayload: 'Start from the number in <code>msg.payload</code> (e.g. the current brightness)',
+        timeMode: 'Time from there', modeFixed: 'always the time above', modeRate: 'same speed – a shorter range takes less time',
+        secVar: 'Context variable', variable: 'Variable',
+        varHint: 'Holds <code>{ value, state, … }</code> of the current run. Choose <b>global</b> to read it from any flow.',
+        sSame: 'Start and stop values must differ.', sDim: 'Dimming', sBright: 'Brightening',
+        sRun: '<b>{a} → {b}</b> in <b>{time}</b>: {sign}{step} every {every} ({n} steps).',
+        sPayload: 'A number in <code>msg.payload</code> (e.g. the current brightness) replaces the start value',
+        sRate: ' – at the same speed, so e.g. {a} → {b} takes {time}.', sFixed: ' – it still takes {time}.',
+        sKept: 'Current value is kept in {v}.', sNotKept: 'Current value is not stored in context.',
+      },
+      pl: {
+        name: 'Nazwa', namePh: 'opcjonalnie', lang: 'Etykiety', langAuto: 'język systemu ({l})',
+        secDim: 'Ściemnianie', start: 'Wartość startowa', stop: 'Wartość końcowa', step: 'Krok', stepUnit: 'zmiana w jednym kroku', time: 'Czas',
+        dirHint: 'Start &gt; koniec: ściemnianie (zasypianie). Start &lt; koniec: rozjaśnianie (budzenie światłem).',
+        fromPayload: 'Zacznij od liczby z <code>msg.payload</code> (np. bieżącej jasności)',
+        timeMode: 'Czas od tego miejsca', modeFixed: 'zawsze czas podany wyżej', modeRate: 'ta sama prędkość – krótszy zakres trwa krócej',
+        secVar: 'Zmienna kontekstu', variable: 'Zmienna',
+        varHint: 'Przechowuje <code>{ value, state, … }</code> bieżącego przebiegu. Wybierz <b>global</b>, żeby czytać ją z każdego flow.',
+        sSame: 'Wartość startowa i końcowa muszą się różnić.', sDim: 'Ściemnianie', sBright: 'Rozjaśnianie',
+        sRun: '<b>{a} → {b}</b> w <b>{time}</b>: {sign}{step} co {every} ({n} kroków).',
+        sPayload: 'Liczba z <code>msg.payload</code> (np. bieżąca jasność) zastępuje wartość startową',
+        sRate: ' – z tą samą prędkością, więc np. {a} → {b} trwa {time}.', sFixed: ' – i nadal trwa {time}.',
+        sKept: 'Bieżąca wartość jest trzymana w {v}.', sNotKept: 'Bieżąca wartość nie jest zapisywana w kontekście.',
+      },
+    };
+    // --- AFYA: język opisów w oknie konfiguracji („Labels”): auto = polski tylko dla polskiego systemu,
+    //     angielski dla wszystkich innych; zmieniają się tylko opisy – nigdy pola ani wartości.
+    const afyaSystemLocale = function () {
+      try {
+        return localStorage.getItem('editor-language') || navigator.language || '';
+      } catch (e) {
+        return navigator.language || '';
+      }
+    };
+    const afyaLang = function (setting) {
+      if (setting === 'pl' || setting === 'en') return setting;
+      return /^pl\b|^pl[-_]/i.test(afyaSystemLocale()) ? 'pl' : 'en';
+    };
+    /** Tłumaczy otwarte okno (data-t, data-t-ph, data-t-title) i zwraca T(klucz, zmienne) dla tekstów z kodu. */
+    const afyaApplyLang = function (form, texts, setting) {
+      const lang = afyaLang(setting);
+      const T = function (k, v) {
+        let s = (texts[lang] && texts[lang][k]) || texts.en[k] || k;
+        Object.keys(v || {}).forEach(function (n) {
+          s = s.split('{' + n + '}').join(v[n]);
+        });
+        return s;
+      };
+      form.find('[data-t]').each(function () {
+        $(this).html(T($(this).attr('data-t')));
+      });
+      form.find('[data-t-ph]').each(function () {
+        $(this).attr('placeholder', T($(this).attr('data-t-ph')));
+      });
+      form.find('[data-t-title]').each(function () {
+        $(this).attr('title', T($(this).attr('data-t-title')));
+      });
+      form.find('#node-input-lang option[value="auto"]').text(T('langAuto', { l: afyaLang('auto') === 'pl' ? 'Polski' : 'English' }));
+      return T;
+    };
 
     function human(seconds) {
       let s = Number(seconds);
@@ -59,6 +124,7 @@
       outputLabels: 'msg.payload = { value, state, direction, timestamp }',
       defaults: {
         name: { value: '' },
+        lang: { value: 'auto' },
         dimmingTime: { value: 1200, required: true, validate: function (v) { return nonNegative(v) && Number(v) > 0; } },
         startValue: { value: 100, required: true, validate: nonNegative },
         stopValue: {
@@ -82,6 +148,9 @@
         return this.name ? 'node_label_italic' : '';
       },
       oneditprepare: function () {
+        if (['auto', 'en', 'pl'].indexOf(this.lang) < 0) $('#node-input-lang').val('auto'); // starsze węzły
+        const form = $('#node-input-lang').closest('.afya-form');
+        let T = afyaApplyLang(form, TEXTS, $('#node-input-lang').val());
         // nodes saved before 0.1.0 had no variable at all – they get one (global) when edited
         if (!this.scope) $('#node-input-scope').val('global');
         const name = $('#node-input-variableName');
@@ -101,24 +170,22 @@
           $('#afya-lullaby-time-human').text('= ' + human(time));
           let text;
           if (start === stop) {
-            text = '<b style="color: var(--red-ui-text-color-error, #AD1625)">Start and stop values must differ.</b>';
+            text = '<b style="color: var(--red-ui-text-color-error, #AD1625)">' + T('sSame') + '</b>';
           } else {
             const steps = Math.max(1, Math.round(Math.abs(start - stop) / step));
             const every = time / steps;
-            text = (start > stop ? '<i class="fa fa-moon-o"></i> Dimming ' : '<i class="fa fa-sun-o"></i> Brightening ') +
-              '<b>' + start + ' → ' + stop + '</b> in <b>' + human(time) + '</b>: ' +
-              (start > stop ? '−' : '+') + step + ' every ' + human(every) + ' (' + steps + ' steps).';
+            text = (start > stop ? '<i class="fa fa-moon-o"></i> ' + T('sDim') : '<i class="fa fa-sun-o"></i> ' + T('sBright')) + ' ' +
+              T('sRun', { a: start, b: stop, time: human(time), sign: start > stop ? '−' : '+', step: step, every: human(every), n: steps });
             if ($('#node-input-startFromPayload').is(':checked')) {
-              text += '<br><i class="fa fa-sign-in"></i> A number in <code>msg.payload</code> (e.g. the current brightness) ' +
-                'replaces the start value' + ($('#node-input-timeMode').val() === 'rate'
-                  ? ' – at the same speed, so e.g. ' + Math.round((start + stop) / 2) + ' → ' + stop + ' takes ' +
-                    human(time * Math.abs(Math.round((start + stop) / 2) - stop) / Math.abs(start - stop)) + '.'
-                  : ' – it still takes ' + human(time) + '.');
+              const half = Math.round((start + stop) / 2);
+              text += '<br><i class="fa fa-sign-in"></i> ' + T('sPayload') + ($('#node-input-timeMode').val() === 'rate'
+                ? T('sRate', { a: half, b: stop, time: human(time * Math.abs(half - stop) / Math.abs(start - stop)) })
+                : T('sFixed', { time: human(time) }));
             }
             const key = plainKey(name.typedInput('value'));
             text += '<br>' + (key
-              ? 'Current value is kept in <code>' + name.typedInput('type') + '.' + $('<span>').text(key).html() + '</code>.'
-              : 'Current value is not stored in context.');
+              ? T('sKept', { v: '<code>' + name.typedInput('type') + '.' + $('<span>').text(key).html() + '</code>' })
+              : T('sNotKept'));
           }
           $('#afya-lullaby-summary').html(text);
         };
@@ -132,6 +199,10 @@
           })
           .trigger('change');
         $('#node-input-timeMode').on('change', summary);
+        $('#node-input-lang').on('change', function () {
+          T = afyaApplyLang(form, TEXTS, $(this).val());
+          summary();
+        });
         summary();
       },
     });
@@ -141,49 +212,57 @@
 <script type="text/html" data-template-name="afya-lullaby">
   <div class="afya-form">
     <div class="form-row">
-      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-      <input type="text" id="node-input-name" placeholder="optional" style="width: 65%;">
-    </div>
-
-    <div class="afya-section"><i class="fa fa-sliders"></i> Dimming</div>
-    <div class="form-row">
-      <label for="node-input-startValue"><i class="fa fa-play"></i> Start value</label>
-      <input type="text" id="node-input-startValue" style="width: 90px;">
+      <label for="node-input-name"><i class="fa fa-tag"></i> <span data-t="name">Name</span></label>
+      <input type="text" id="node-input-name" data-t-ph="namePh" placeholder="optional" style="width: 65%;">
     </div>
     <div class="form-row">
-      <label for="node-input-stopValue"><i class="fa fa-stop"></i> Stop value</label>
-      <input type="text" id="node-input-stopValue" style="width: 90px;">
-    </div>
-    <div class="form-row">
-      <label for="node-input-step"><i class="fa fa-arrows-v"></i> Step</label>
-      <input type="text" id="node-input-step" style="width: 90px;">
-      <span class="afya-unit">change per step</span>
-    </div>
-    <div class="form-row">
-      <label for="node-input-dimmingTime"><i class="fa fa-clock-o"></i> Time</label>
-      <input type="text" id="node-input-dimmingTime" style="width: 90px;">
-      <span class="afya-unit">s <span id="afya-lullaby-time-human"></span></span>
-    </div>
-    <div class="afya-hint">Start &gt; stop: dimming (falling asleep). Start &lt; stop: brightening (wake-up light).</div>
-    <div class="afya-check">
-      <input type="checkbox" id="node-input-startFromPayload">
-      <label for="node-input-startFromPayload">Start from the number in <code>msg.payload</code> (e.g. the current brightness)</label>
-    </div>
-    <div class="form-row afya-lullaby-payload">
-      <label for="node-input-timeMode"><i class="fa fa-tachometer"></i> Time from there</label>
-      <select id="node-input-timeMode" style="width: 65%;">
-        <option value="fixed">always the time above</option>
-        <option value="rate">same speed – a shorter range takes less time</option>
+      <label for="node-input-lang"><i class="fa fa-language"></i> <span data-t="lang">Labels</span></label>
+      <select id="node-input-lang" style="width: 65%;">
+        <option value="auto">system language</option>
+        <option value="en">English</option>
+        <option value="pl">Polski</option>
       </select>
     </div>
 
-    <div class="afya-section"><i class="fa fa-database"></i> Context variable</div>
+    <div class="afya-section"><i class="fa fa-sliders"></i> <span data-t="secDim">Dimming</span></div>
     <div class="form-row">
-      <label for="node-input-variableName"><i class="fa fa-globe"></i> Variable</label>
+      <label for="node-input-startValue"><i class="fa fa-play"></i> <span data-t="start">Start value</span></label>
+      <input type="text" id="node-input-startValue" style="width: 90px;">
+    </div>
+    <div class="form-row">
+      <label for="node-input-stopValue"><i class="fa fa-stop"></i> <span data-t="stop">Stop value</span></label>
+      <input type="text" id="node-input-stopValue" style="width: 90px;">
+    </div>
+    <div class="form-row">
+      <label for="node-input-step"><i class="fa fa-arrows-v"></i> <span data-t="step">Step</span></label>
+      <input type="text" id="node-input-step" style="width: 90px;">
+      <span class="afya-unit" data-t="stepUnit">change per step</span>
+    </div>
+    <div class="form-row">
+      <label for="node-input-dimmingTime"><i class="fa fa-clock-o"></i> <span data-t="time">Time</span></label>
+      <input type="text" id="node-input-dimmingTime" style="width: 90px;">
+      <span class="afya-unit">s <span id="afya-lullaby-time-human"></span></span>
+    </div>
+    <div class="afya-hint" data-t="dirHint">Start &gt; stop: dimming (falling asleep). Start &lt; stop: brightening (wake-up light).</div>
+    <div class="afya-check">
+      <input type="checkbox" id="node-input-startFromPayload">
+      <label for="node-input-startFromPayload" data-t="fromPayload">Start from the number in <code>msg.payload</code> (e.g. the current brightness)</label>
+    </div>
+    <div class="form-row afya-lullaby-payload">
+      <label for="node-input-timeMode"><i class="fa fa-tachometer"></i> <span data-t="timeMode">Time from there</span></label>
+      <select id="node-input-timeMode" style="width: 65%;">
+        <option value="fixed" data-t="modeFixed">always the time above</option>
+        <option value="rate" data-t="modeRate">same speed – a shorter range takes less time</option>
+      </select>
+    </div>
+
+    <div class="afya-section"><i class="fa fa-database"></i> <span data-t="secVar">Context variable</span></div>
+    <div class="form-row">
+      <label for="node-input-variableName"><i class="fa fa-globe"></i> <span data-t="variable">Variable</span></label>
       <input type="text" id="node-input-variableName" style="width: 65%;">
       <input type="hidden" id="node-input-scope">
     </div>
-    <div class="afya-hint">Holds <code>{ value, state, … }</code> of the current run. Choose <b>global</b> to read it from any flow.</div>
+    <div class="afya-hint" data-t="varHint">Holds <code>{ value, state, … }</code> of the current run. Choose <b>global</b> to read it from any flow.</div>
 
     <div class="afya-summary"><i class="fa fa-info-circle"></i><span id="afya-lullaby-summary"></span></div>
   </div>

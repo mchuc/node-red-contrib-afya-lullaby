@@ -26,6 +26,7 @@ Requires Node-RED ≥ 3.0 and Node.js ≥ 18. The node appears in the **AFYA** p
 
 | Field | Description |
 |---|---|
+| Labels | Language of the descriptions in the edit dialog: *system language* (Polish for a Polish system, English for all others), *English* or *Polski*. Only the descriptions change – fields and values stay the same. |
 | **Start value** | Value at the beginning (e.g. 100). |
 | **Stop value** | Value at the end (e.g. 0). Start > stop: dimming; start < stop: brightening. |
 | **Step** | Change per step (integer > 0). |
@@ -87,6 +88,8 @@ npm install node-red-contrib-afya-lullaby
 ```
 
 Wymaga Node-RED ≥ 3.0 i Node.js ≥ 18. Węzeł **lullaby** jest w grupie palety **AFYA**.
+
+**Etykiety (Labels)** – język opisów w oknie konfiguracji: *język systemu* (polski dla polskiego systemu, angielski dla każdego innego), *English* albo *Polski*. Zmieniają się tylko opisy – pola i wartości zostają takie same.
 
 ### Użycie
 
